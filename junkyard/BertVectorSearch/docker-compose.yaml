@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  odb-search:
+    build:
+      context: .
+    volumes:
+      - .:/work  # 出力ディレクトリをマウント
+      - ./app:/work/app  # 出力ディレクトリをマウント
+
