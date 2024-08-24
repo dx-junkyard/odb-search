@@ -15,8 +15,8 @@ class OverviewSearch:
         self.service_catalog_file = service_catalog_file
         self.embeddings_file = embeddings_file
         self.use_saved_embeddings = use_saved_embeddings
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-        self.model = BertModel.from_pretrained('bert-base-uncased')
+        self.tokenizer = BertTokenizer.from_pretrained('cl-tohoku/bert-base-japanese-v3')
+        self.model = BertModel.from_pretrained('cl-tohoku/bert-base-japanese-v3')
 
         if self.use_saved_embeddings and self.embeddings_file and os.path.exists(self.embeddings_file):
             self.overview_embeddings, self.entries = self.load_embeddings_from_file(self.embeddings_file)
