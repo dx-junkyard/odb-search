@@ -4,6 +4,7 @@ from transformers import BertTokenizer, BertModel
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import os
+import MeCab
 
 class OverviewSearch:
     def __init__(self, service_catalog_file, embeddings_file=None, use_saved_embeddings=False):
@@ -53,6 +54,25 @@ class OverviewSearch:
         embedding = outputs.last_hidden_state.mean(dim=1)
         return embedding.detach().numpy()
 
+    def preprocess_text(self, text):
+        """
+        テキストの前処理としてMeCabで形態素解析を行い、名詞のみを抽出し、ストップワードを除去する
+        """
+        # MeCabの初期化
+        mecab = MeCab.Tagger()
+
+        # 形態素解析
+        node = mecab.parseToNode(text)
+        words = []
+        while node:
+            # 名詞のみ抽出
+            if node.feature.split(',')[0] in ['名詞']:
+                word = node.surface
+                words.append(word)
+            node = node.next
+
+        return ' '.join(words)
+
     def get_overview_embeddings(self, service_catalog):
         """全ての概要をベクトル化する"""
         overview_embeddings = []
@@ -68,11 +88,13 @@ class OverviewSearch:
                 continue  # 不正な形式はスキップ
 
             if overview:
-                embedding = self.get_embedding(overview)
+                processing_text = self.preprocess_text(overview) # 名詞のみを抽出
+                embedding = self.get_embedding(processing_text)
                 overview_embeddings.append(embedding)
 
                 entry = {
-                    'overview': overview,
+                    'overview': processing_text, # 名詞のみを抽出した概要テキスト
+                    'overview_original': overview, # 出力用の加工前の概要テキスト
                     'formal_name': service.get("正式名称", {}).get("items", ["N/A"])[0],
                     'url': service.get("URL", {}).get("items", "N/A")
                 }
@@ -82,7 +104,7 @@ class OverviewSearch:
 
     def search_top_n_similar_overviews(self, question, top_n=3):
         """質問に最も類似した上位n件の概要を返す"""
-        question_embedding = self.get_embedding(question)
+        question_embedding = self.get_embedding(self.preprocess_text(question)) # 名詞のみを抽出
         similarities = cosine_similarity(question_embedding, self.overview_embeddings)
 
         # 上位n件のインデックスを取得
@@ -110,7 +132,7 @@ print("質問文：",question)
 for i, result in enumerate(top_results):
     print(f"結果 {i+1}:")
     print("正式名称: ", result['formal_name'])
-    print("概要: ", result['overview'])
+    print("概要: ", result['overview_original'])
     print("URL: ", result['url'])
     print()
 
