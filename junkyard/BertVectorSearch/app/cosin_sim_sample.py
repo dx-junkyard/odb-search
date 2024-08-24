@@ -17,7 +17,7 @@ class OverviewSearch:
         self.use_saved_embeddings = use_saved_embeddings
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         self.model = BertModel.from_pretrained('bert-base-uncased')
-        
+
         if self.use_saved_embeddings and self.embeddings_file and os.path.exists(self.embeddings_file):
             self.overview_embeddings, self.entries = self.load_embeddings_from_file(self.embeddings_file)
         else:
@@ -25,7 +25,7 @@ class OverviewSearch:
             self.overview_embeddings, self.entries = self.get_overview_embeddings(self.service_catalog)
             if self.embeddings_file:
                 self.save_embeddings_to_file(self.overview_embeddings, self.entries, self.embeddings_file)
-    
+
     def load_json_data(self, file_path):
         """JSONファイルを読み込む"""
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -57,7 +57,7 @@ class OverviewSearch:
         """全ての概要をベクトル化する"""
         overview_embeddings = []
         entries = []
-        
+
         for service in service_catalog:
             overview_data = service.get("概要", {}).get("items", [])
             if isinstance(overview_data, list):
@@ -70,7 +70,7 @@ class OverviewSearch:
             if overview:
                 embedding = self.get_embedding(overview)
                 overview_embeddings.append(embedding)
-                
+
                 entry = {
                     'overview': overview,
                     'formal_name': service.get("正式名称", {}).get("items", ["N/A"])[0],
@@ -84,10 +84,10 @@ class OverviewSearch:
         """質問に最も類似した上位n件の概要を返す"""
         question_embedding = self.get_embedding(question)
         similarities = cosine_similarity(question_embedding, self.overview_embeddings)
-        
+
         # 上位n件のインデックスを取得
         top_n_indices = np.argsort(similarities[0])[-top_n:][::-1]
-        
+
         # 上位n件のエントリを返す
         top_n_results = [self.entries[i] for i in top_n_indices]
         return top_n_results
