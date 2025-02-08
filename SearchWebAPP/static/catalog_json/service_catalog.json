@@ -1,0 +1,26 @@
+[
+  {
+    "お問い合わせ": {
+      "items": [
+        "お問い合わせ",
+        "（お問い合わせ先）"
+      ]
+    },
+    "正式名称": {
+      "items": [
+        "何かしらの行政サービス"
+      ]
+    },
+    "概要": {
+      "items": [
+        "(LLMで作成されたサービス概要)",
+        "overview_embeddings.jsonと、service_catalog.jsonは、",
+        "https://github.com/dx-junkyard/OpenData-Bridge-pipeline/tree/main/LocalGovData/432041_city_arao",
+        "で作成されたものに置き換えてください"
+      ]
+    },
+    "URL": {
+      "items": "https://www.dx-junkyard.com/"
+    }
+  }
+]
