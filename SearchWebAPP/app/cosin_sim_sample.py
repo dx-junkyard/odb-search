@@ -59,21 +59,24 @@ class OverviewSearch:
         entries = []
         
         for service in service_catalog:
-            overview_data = service.get("概要", {}).get("items", [])
-            if isinstance(overview_data, list):
-                overview = " ".join(overview_data)
-            elif isinstance(overview_data, str):
-                overview = overview_data
-            else:
-                continue  # 不正な形式はスキップ
+            # 新しいデータ形式に対応
+            overview = service.get("サービス内容", "")
+            if not overview:
+                # 古いデータ形式のフォールバック
+                overview_data = service.get("概要", {}).get("items", [])
+                if isinstance(overview_data, list):
+                    overview = " ".join(overview_data)
+                elif isinstance(overview_data, str):
+                    overview = overview_data
 
             if overview:
                 embedding = self.get_embedding(overview)
                 overview_embeddings.append(embedding)
                 
+                # 新しいデータ形式に対応
                 entry = {
                     'overview': overview,
-                    'formal_name': service.get("正式名称", {}).get("items", ["N/A"])[0],
+                    'formal_name': service.get("タイトル", "N/A"),
                     'url': service.get("URL", {}).get("items", "N/A")
                 }
                 entries.append(entry)
