@@ -1,21 +1,15 @@
-FROM python:3.9-slim
-
+FROM python:3.11-slim
 WORKDIR /app
 
-# 必要なディレクトリを作成
-RUN mkdir -p /static
+# System deps for transformers & torch wheels
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
-# アプリケーションコードと静的ファイルをコピー
-COPY ./app /app
-COPY ./static /static
+COPY app/ app/
+COPY static/ static/
+COPY app/requirements.txt ./requirements.txt
 
-# 依存関係をインストール
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 環境変数を設定
-ENV PYTHONUNBUFFERED=1
-ENV CATALOG_DIR=/static/catalog_json
-
-# アプリケーションを起動
-CMD ["uvicorn", "search_api:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8501
+ENTRYPOINT ["streamlit", "run", "app/main.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.enableCORS", "false"]
 
