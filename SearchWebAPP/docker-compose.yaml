@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  app:
+    build: .
+    command: streamlit run app/main.py --server.port 8501 --server.address 0.0.0.0 --server.enableCORS false
+    ports: ["8501:8501"]
+    volumes:
+      - .:/app  # hot‑reload during development
+    env_file: [".env"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
