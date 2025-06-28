@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>法令検索チャット</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f9f9f9; }
+        #chat-container { width: 400px; margin: 20px auto; border: 1px solid #ccc; padding: 10px; border-radius: 5px; background: #fff; }
+        #messages { height: 300px; overflow-y: auto; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+        .message { margin: 5px 0; }
+        .user { text-align: right; }
+        #input-container { display: flex; margin-top: 10px; }
+        #user-input { flex: 1; padding: 5px; }
+        #send-button { padding: 5px; }
+        #karte { 
+            margin-top: 20px; 
+            border-radius: 10px; 
+            padding: 15px; 
+            background: #eef5ff; 
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .karte-section { margin-bottom: 10px; display: flex; align-items: center; }
+        .karte-title { font-weight: bold; color: #333; flex: 1; }
+        .editable { 
+            border: 1px solid #ccc; 
+            padding: 8px; 
+            min-height: 20px; 
+            cursor: text; 
+            background: #fff; 
+            border-radius: 5px;
+            flex: 3;
+        }
+        .update-button { 
+            margin-left: 10px; 
+            padding: 5px; 
+            background-color: #87ceeb; 
+            border: none; 
+            cursor: pointer; 
+            border-radius: 5px; 
+            color: #fff; 
+        }
+    </style>
+</head>
+<body>
+    <div id="chat-container">
+        <div id="messages"></div>
+        <div id="input-container">
+            <input type="text" id="user-input" placeholder="質問を入力...">
+            <button id="send-button">送信</button>
+        </div>
+    </div>
+    <div id="karte">
+        <h3 style="text-align:center; color:#444;">ユーザーカルテ</h3>
+        <div class="karte-section">
+            <p class="karte-title">メモ:</p>
+            <span id="memo" class="editable" contenteditable="true">なし</span>
+            <button class="update-button" onclick="updateNeeds()">更新</button>
+        </div>
+        <div class="karte-section">
+            <p class="karte-title">ユーザーニーズの推測:</p>
+            <span id="needs" class="editable" contenteditable="true">なし</span>
+            <button class="update-button" onclick="updateFilters()">更新</button>
+        </div>
+        <div class="karte-section">
+            <p class="karte-title">検索条件:</p>
+            <span id="filters" class="editable" contenteditable="true">なし</span>
+        </div>
+        <button class="update-button" style="width: 100%; margin-top: 10px; background-color: #4682b4;" onclick="executeSearch()">検索実行</button>
+    </div>
+
+    <script>
+        function updateNeeds() {
+            let memoText = document.getElementById("memo").textContent;
+            fetch("/api/generate_needs", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ memo: memoText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("needs").textContent = data.needs;
+            })
+            .catch(error => console.error("Error updating needs:", error));
+        }
+
+        function updateFilters() {
+            let needsText = document.getElementById("needs").textContent;
+            fetch("/api/generate_filters", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ needs: needsText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("filters").textContent = JSON.stringify(data.filters);
+            })
+            .catch(error => console.error("Error updating filters:", error));
+        }
+
+        function executeSearch() {
+            let filtersText = document.getElementById("filters").textContent;
+            fetch("/api/search_laws", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filters: JSON.parse(filtersText) })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.results.length > 0) {
+                    alert("検索結果:\n" + data.results.map(law => `- ${law.LawTitle} (${law.Article})`).join("\n"));
+                } else {
+                    alert("関連する法令は見つかりませんでした。");
+                }
+            })
+            .catch(error => console.error("Error executing search:", error));
+        }
+    </script>
+</body>
+</html>
+
