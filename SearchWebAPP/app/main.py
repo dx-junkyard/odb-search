@@ -13,12 +13,8 @@ _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(_CURRENT_DIR)
 
 from embed_utils import embed_text
-from llm_utils import label_question
-from catalog_utils import (
-    CATALOG_DF,
-    apply_label_filter,
-    rank_by_similarity,
-)
+from llm_utils import label_question, ServiceSelector
+from catalog_utils import CatalogSearchEngine
 
 load_dotenv()
 
@@ -27,6 +23,9 @@ st.set_page_config(page_title="自治体サービス案内チャット", page_ic
 # keep chat history between reruns
 if "history" not in st.session_state:
     st.session_state.history = []  # list[(role, msg)]
+
+searcher = CatalogSearchEngine()
+selector = ServiceSelector()
 
 # --- Chat input form ---
 with st.form("chat_form", clear_on_submit=True):
@@ -48,25 +47,35 @@ if submitted and user_msg:
     logger.info(f"サービスラベル: {service_labels}")
 
     # 3) filter catalog by labels
-    filtered_df = apply_label_filter(CATALOG_DF, target_labels, service_labels)
+    filtered_df = searcher.filter_by_labels(target_labels, service_labels)
     
     # ログ出力: フィルター後の件数
     logger.info(f"フィルター後のサービス件数: {len(filtered_df)}件")
 
-    # 4) BERT embed + similarity ranking
+    # 4) BERT embed + similarity ranking (top 100)
     query_vec = embed_text(user_msg)
-    ranked_df = rank_by_similarity(filtered_df, query_vec)
+    ranked_df = searcher.rank(filtered_df, query_vec, top_n=100)
 
-    # 5) craft assistant reply
+    # 5) craft assistant reply using LLM selection
     if ranked_df.empty:
         assistant_reply = "すみません、該当する自治体サービスが見つかりませんでした。別の表現でお試しください。"
     else:
-        top_rows = ranked_df.head(10)
-        services = "\n".join(
-            f"- **{row['タイトル']}** ({row['URL']['items']})"
-            for _, row in top_rows.iterrows()
-        )
-        assistant_reply = "以下のサービスが見つかりました:\n" + services
+        candidates = [
+            {"title": row["タイトル"], "url": row["URL"]["items"]}
+            for _, row in ranked_df.iterrows()
+        ]
+        recs = selector.recommend(user_msg, candidates)
+        if recs:
+            services = "\n".join(
+                f"- **{r['title']}** ({r['url']})" for r in recs
+            )
+            assistant_reply = "おすすめのサービスはこちらです:\n" + services
+        else:
+            top_rows = ranked_df.head(3)
+            services = "\n".join(
+                f"- **{row['タイトル']}** ({row['URL']['items']})" for _, row in top_rows.iterrows()
+            )
+            assistant_reply = "以下のサービスが見つかりました:\n" + services
 
     st.session_state.history.append(("assistant", assistant_reply))
 

@@ -102,3 +102,28 @@ def rank_by_similarity(filtered: pd.DataFrame, query_vec: np.ndarray):
     out = filtered_valid.copy()
     out["similarity"] = sims
     return out.sort_values("similarity", ascending=False).head(10)
+
+
+class CatalogSearchEngine:
+    """Search and rank services within the catalog."""
+
+    def __init__(self, catalog_df: pd.DataFrame = CATALOG_DF, embed_matrix: np.ndarray = EMBED_MATRIX):
+        self.catalog_df = catalog_df
+        self.embed_matrix = embed_matrix
+
+    def filter_by_labels(self, target_labels: list[str], service_labels: list[str]):
+        return apply_label_filter(self.catalog_df, target_labels, service_labels)
+
+    def rank(self, filtered_df: pd.DataFrame, query_vec: np.ndarray, top_n: int = 10):
+        if filtered_df.empty:
+            return filtered_df
+
+        valid_indices = filtered_df.index[filtered_df.index < len(self.embed_matrix)]
+        if len(valid_indices) == 0:
+            return filtered_df.iloc[:0]
+
+        filtered_valid = filtered_df.loc[valid_indices]
+        sims = cosine_similarity([query_vec], self.embed_matrix[valid_indices])[0]
+        out = filtered_valid.copy()
+        out["similarity"] = sims
+        return out.sort_values("similarity", ascending=False).head(top_n)
