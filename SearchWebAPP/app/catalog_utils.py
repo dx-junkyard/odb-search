@@ -9,9 +9,19 @@ with open(CATALOG_PATH, "r", encoding="utf-8") as f:
     _catalog_raw = json.load(f)
 CATALOG_DF = pd.DataFrame(_catalog_raw)
 
-with open(EMBED_PATH, "r", encoding="utf-8") as f:
-    _embed_raw = json.load(f)["embeddings"]
-EMBED_MATRIX = np.array(_embed_raw, dtype=np.float32)  # shape (N, 768)
+_embed_raw: list | None = None
+if os.path.exists(EMBED_PATH) and os.path.getsize(EMBED_PATH) > 0:
+    try:
+        with open(EMBED_PATH, "r", encoding="utf-8") as f:
+            _embed_raw = json.load(f).get("embeddings")
+    except Exception:
+        _embed_raw = None
+
+if _embed_raw:
+    EMBED_MATRIX = np.array(_embed_raw, dtype=np.float32)
+else:
+    # fail-safe when embedding file is missing or invalid
+    EMBED_MATRIX = np.empty((0, 768), dtype=np.float32)
 
 
 def apply_label_filter(df: pd.DataFrame, tgt: list[str], svc: list[str]):
