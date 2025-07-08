@@ -38,8 +38,13 @@ if submitted and user_msg:
     st.session_state.history.append(("user", user_msg))
 
     # 2) classify with LLM → labels
-    labels = label_question(user_msg)
-    target_labels  = labels.get("target_labels", [])
+    try:
+        labels = label_question(user_msg)
+    except Exception:
+        logger.exception("label_question failed")
+        st.session_state.history.append(("assistant", "内部エラーが発生しました。時間を置いて再度お試しください。"))
+        st.stop()
+    target_labels = labels.get("target_labels", [])
     service_labels = labels.get("service_labels", [])
     
     # ログ出力: 取得したラベル
@@ -52,9 +57,9 @@ if submitted and user_msg:
     # ログ出力: フィルター後の件数
     logger.info(f"フィルター後のサービス件数: {len(filtered_df)}件")
 
-    # 4) BERT embed + similarity ranking (top 100)
+    # 4) BERT embed + similarity ranking (top 50)
     query_vec = embed_text(user_msg)
-    ranked_df = searcher.rank(filtered_df, query_vec, top_n=100)
+    ranked_df = searcher.rank(filtered_df, query_vec, top_n=50)
 
     # 5) craft assistant reply using LLM selection
     if ranked_df.empty:
@@ -64,7 +69,11 @@ if submitted and user_msg:
             {"title": row["タイトル"], "url": row["URL"]["items"]}
             for _, row in ranked_df.iterrows()
         ]
-        recs = selector.recommend(user_msg, candidates)
+        try:
+            recs = selector.recommend(user_msg, candidates)
+        except Exception:
+            logger.exception("recommend failed")
+            recs = []
         if recs:
             services = "\n".join(
                 f"- **{r['title']}** ({r['url']})" for r in recs
