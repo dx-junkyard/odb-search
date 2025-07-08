@@ -1,6 +1,8 @@
 """Interact with Ollama for label classification and service selection."""
 from __future__ import annotations
-import os, json, requests
+import os, json, requests, logging
+
+logger = logging.getLogger(__name__)
 
 OLLAMA_BASE = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434/v1")
 CHAT_MODEL   = os.getenv("CHAT_MODEL", "llama3.3:latest")
@@ -28,10 +30,19 @@ def label_question(question: str) -> dict:
         "messages": [{"role": "user", "content": PROMPT_TEMPLATE + question}],
         "temperature": 0.2,
     }
-    r = requests.post(
-        f"{OLLAMA_BASE}/chat/completions", headers=HEADERS, json=body, timeout=120
-    )
-    r.raise_for_status()
+    logger.debug("label_question request payload: %s", body)
+    try:
+        r = requests.post(
+            f"{OLLAMA_BASE}/chat/completions",
+            headers=HEADERS,
+            json=body,
+            timeout=120,
+        )
+        r.raise_for_status()
+    except requests.RequestException:
+        logger.exception("Failed to request label classification from %s", OLLAMA_BASE)
+        raise
+
     content = r.json()["choices"][0]["message"]["content"]
     start, end = content.find("{"), content.rfind("}") + 1
     return json.loads(content[start:end])
@@ -50,13 +61,24 @@ class ServiceSelector:
         }
         body = {
             "model": CHAT_MODEL,
-            "messages": [{"role": "user", "content": SELECT_PROMPT_TEMPLATE + json.dumps(payload, ensure_ascii=False)}],
+            "messages": [
+                {"role": "user", "content": SELECT_PROMPT_TEMPLATE + json.dumps(payload, ensure_ascii=False)}
+            ],
             "temperature": 0.2,
         }
-        r = requests.post(
-            f"{OLLAMA_BASE}/chat/completions", headers=HEADERS, json=body, timeout=120
-        )
-        r.raise_for_status()
+        logger.debug("recommend request payload: %s", body)
+        try:
+            r = requests.post(
+                f"{OLLAMA_BASE}/chat/completions",
+                headers=HEADERS,
+                json=body,
+                timeout=120,
+            )
+            r.raise_for_status()
+        except requests.RequestException:
+            logger.exception("Failed to request service selection from %s", OLLAMA_BASE)
+            raise
+
         content = r.json()["choices"][0]["message"]["content"]
         start, end = content.find("{"), content.rfind("}") + 1
         try:
@@ -64,5 +86,6 @@ class ServiceSelector:
             recs = data.get("recommendations", [])
             return recs[: self.max_select]
         except Exception:
+            logger.exception("Failed to parse recommendations: %s", content)
             return []
 

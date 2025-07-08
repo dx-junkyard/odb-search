@@ -38,8 +38,13 @@ if submitted and user_msg:
     st.session_state.history.append(("user", user_msg))
 
     # 2) classify with LLM → labels
-    labels = label_question(user_msg)
-    target_labels  = labels.get("target_labels", [])
+    try:
+        labels = label_question(user_msg)
+    except Exception:
+        logger.exception("label_question failed")
+        st.session_state.history.append(("assistant", "内部エラーが発生しました。時間を置いて再度お試しください。"))
+        st.stop()
+    target_labels = labels.get("target_labels", [])
     service_labels = labels.get("service_labels", [])
     
     # ログ出力: 取得したラベル
@@ -64,7 +69,11 @@ if submitted and user_msg:
             {"title": row["タイトル"], "url": row["URL"]["items"]}
             for _, row in ranked_df.iterrows()
         ]
-        recs = selector.recommend(user_msg, candidates)
+        try:
+            recs = selector.recommend(user_msg, candidates)
+        except Exception:
+            logger.exception("recommend failed")
+            recs = []
         if recs:
             services = "\n".join(
                 f"- **{r['title']}** ({r['url']})" for r in recs
