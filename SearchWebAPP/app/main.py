@@ -57,9 +57,9 @@ if submitted and user_msg:
     # ログ出力: フィルター後の件数
     logger.info(f"フィルター後のサービス件数: {len(filtered_df)}件")
 
-    # 4) BERT embed + similarity ranking (top 100)
+    # 4) BERT embed + similarity ranking (top 50)
     query_vec = embed_text(user_msg)
-    ranked_df = searcher.rank(filtered_df, query_vec, top_n=100)
+    ranked_df = searcher.rank(filtered_df, query_vec, top_n=50)
 
     # 5) craft assistant reply using LLM selection
     if ranked_df.empty:
