@@ -1,16 +1,13 @@
-"""Interact with Ollama for label classification and service selection."""
+"""OpenAI APIを用いたラベル分類とサービス選択"""
 from __future__ import annotations
-import os, json, requests, logging
+import os, json, logging
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_BASE = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434/v1")
-CHAT_MODEL   = os.getenv("CHAT_MODEL", "llama3.3:latest")
-API_KEY = os.getenv("API_KEY", "ollama")
-HEADERS = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {API_KEY}",
-}
+API_KEY = os.getenv("OPENAI_API_KEY")
+CHAT_MODEL = os.getenv("CHAT_MODEL", "gpt-3.5-turbo")
+client = OpenAI(api_key=API_KEY)
 
 PROMPT_PATH = os.path.join(os.path.dirname(__file__), "..", "static", "llm_service_json_prompt.txt")
 with open(PROMPT_PATH, "r", encoding="utf-8") as fp:
@@ -23,34 +20,27 @@ try:
 except FileNotFoundError:
     SELECT_PROMPT_TEMPLATE = ""
 
-
 def label_question(question: str) -> dict:
-    body = {
-        "model": CHAT_MODEL,
-        "messages": [{"role": "user", "content": PROMPT_TEMPLATE + question}],
-        "temperature": 0.2,
-    }
-    logger.debug("label_question request payload: %s", body)
+    messages = [
+        {"role": "user", "content": PROMPT_TEMPLATE + question}
+    ]
     try:
-        r = requests.post(
-            f"{OLLAMA_BASE}/chat/completions",
-            headers=HEADERS,
-            json=body,
+        response = client.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=messages,
+            temperature=0.2,
+            response_format={"type": "json_object"},
             timeout=120,
         )
-        r.raise_for_status()
-    except requests.RequestException:
-        logger.exception("Failed to request label classification from %s", OLLAMA_BASE)
+        content = response.choices[0].message.content
+        start, end = content.find("{"), content.rfind("}") + 1
+        return json.loads(content[start:end])
+    except Exception:
+        logger.exception("Failed to request label classification from OpenAI API")
         raise
 
-    content = r.json()["choices"][0]["message"]["content"]
-    start, end = content.find("{"), content.rfind("}") + 1
-    return json.loads(content[start:end])
-
-
 class ServiceSelector:
-    """Select best services from candidates using LLM."""
-
+    """LLMを用いたサービス推薦"""
     def __init__(self, max_select: int = 3):
         self.max_select = max_select
 
@@ -59,33 +49,23 @@ class ServiceSelector:
             "question": question,
             "candidates": candidates,
         }
-        body = {
-            "model": CHAT_MODEL,
-            "messages": [
-                {"role": "user", "content": SELECT_PROMPT_TEMPLATE + json.dumps(payload, ensure_ascii=False)}
-            ],
-            "temperature": 0.2,
-        }
-        logger.debug("recommend request payload: %s", body)
+        messages = [
+            {"role": "user", "content": SELECT_PROMPT_TEMPLATE + json.dumps(payload, ensure_ascii=False)}
+        ]
         try:
-            r = requests.post(
-                f"{OLLAMA_BASE}/chat/completions",
-                headers=HEADERS,
-                json=body,
+            response = client.chat.completions.create(
+                model=CHAT_MODEL,
+                messages=messages,
+                temperature=0.2,
+                response_format={"type": "json_object"},
                 timeout=120,
             )
-            r.raise_for_status()
-        except requests.RequestException:
-            logger.exception("Failed to request service selection from %s", OLLAMA_BASE)
-            raise
-
-        content = r.json()["choices"][0]["message"]["content"]
-        start, end = content.find("{"), content.rfind("}") + 1
-        try:
+            content = response.choices[0].message.content
+            start, end = content.find("{"), content.rfind("}") + 1
             data = json.loads(content[start:end])
             recs = data.get("recommendations", [])
             return recs[: self.max_select]
         except Exception:
-            logger.exception("Failed to parse recommendations: %s", content)
+            logger.exception("Failed to request service selection from OpenAI API")
             return []
 
