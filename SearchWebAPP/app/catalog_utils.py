@@ -9,9 +9,19 @@ with open(CATALOG_PATH, "r", encoding="utf-8") as f:
     _catalog_raw = json.load(f)
 CATALOG_DF = pd.DataFrame(_catalog_raw)
 
-with open(EMBED_PATH, "r", encoding="utf-8") as f:
-    _embed_raw = json.load(f)["embeddings"]
-EMBED_MATRIX = np.array(_embed_raw, dtype=np.float32)  # shape (N, 768)
+_embed_raw: list | None = None
+if os.path.exists(EMBED_PATH) and os.path.getsize(EMBED_PATH) > 0:
+    try:
+        with open(EMBED_PATH, "r", encoding="utf-8") as f:
+            _embed_raw = json.load(f).get("embeddings")
+    except Exception:
+        _embed_raw = None
+
+if _embed_raw:
+    EMBED_MATRIX = np.array(_embed_raw, dtype=np.float32)
+else:
+    # fail-safe when embedding file is missing or invalid
+    EMBED_MATRIX = np.empty((0, 768), dtype=np.float32)
 
 
 def apply_label_filter(df: pd.DataFrame, tgt: list[str], svc: list[str]):
@@ -102,3 +112,28 @@ def rank_by_similarity(filtered: pd.DataFrame, query_vec: np.ndarray):
     out = filtered_valid.copy()
     out["similarity"] = sims
     return out.sort_values("similarity", ascending=False).head(10)
+
+
+class CatalogSearchEngine:
+    """Search and rank services within the catalog."""
+
+    def __init__(self, catalog_df: pd.DataFrame = CATALOG_DF, embed_matrix: np.ndarray = EMBED_MATRIX):
+        self.catalog_df = catalog_df
+        self.embed_matrix = embed_matrix
+
+    def filter_by_labels(self, target_labels: list[str], service_labels: list[str]):
+        return apply_label_filter(self.catalog_df, target_labels, service_labels)
+
+    def rank(self, filtered_df: pd.DataFrame, query_vec: np.ndarray, top_n: int = 10):
+        if filtered_df.empty:
+            return filtered_df
+
+        valid_indices = filtered_df.index[filtered_df.index < len(self.embed_matrix)]
+        if len(valid_indices) == 0:
+            return filtered_df.iloc[:0]
+
+        filtered_valid = filtered_df.loc[valid_indices]
+        sims = cosine_similarity([query_vec], self.embed_matrix[valid_indices])[0]
+        out = filtered_valid.copy()
+        out["similarity"] = sims
+        return out.sort_values("similarity", ascending=False).head(top_n)

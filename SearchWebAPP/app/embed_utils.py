@@ -1,19 +1,15 @@
-"""BERT‑based text embedding for similarity search."""
-import torch, numpy as np
-from transformers import BertTokenizer, BertModel
-from functools import lru_cache
+"""OpenAI埋め込みAPIによるテキスト埋め込み生成ユーティリティ"""
+import os
+import numpy as np
+from openai import OpenAI
 
-@lru_cache(maxsize=1)
-def _load_bert():
-    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    model = BertModel.from_pretrained("bert-base-uncased")
-    model.eval()
-    return tokenizer, model
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-ada-002")
 
-@torch.no_grad()
 def embed_text(text: str) -> np.ndarray:
-    tokenizer, model = _load_bert()
-    inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
-    outputs = model(**inputs)
-    emb = outputs.last_hidden_state.mean(dim=1).squeeze(0)
-    return emb.numpy()
+    response = client.embeddings.create(
+        input=text,
+        model=EMBEDDING_MODEL
+    )
+    embedding = response.data[0].embedding
+    return np.array(embedding, dtype=np.float32)
