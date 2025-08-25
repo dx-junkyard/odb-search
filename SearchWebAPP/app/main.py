@@ -38,13 +38,20 @@ with st.form("chat_form", clear_on_submit=True):
 if submitted and user_msg:
     # 1) store user message
     st.session_state.history.append(("user", user_msg))
+    logger.info("Received user message: %s", user_msg)
 
     # combine with pending question if we previously asked for target info
     combined_question = f"{st.session_state.pending_question} {user_msg}".strip()
+    logger.info(
+        "Combined question: '%s' (pending='%s')",
+        combined_question,
+        st.session_state.pending_question,
+    )
 
     # 2) classify using LangGraph workflow
     try:
         state = workflow.invoke({"question": combined_question, "target_labels": [], "service_labels": []})
+        logger.info("Workflow output: %s", state)
     except Exception:
         logger.exception("label_question failed")
         st.session_state.history.append(("assistant", "内部エラーが発生しました。時間を置いて再度お試しください。"))
@@ -53,16 +60,18 @@ if submitted and user_msg:
     if state["action"] == "ask":
         # ask user to specify target
         st.session_state.pending_question = combined_question
+        logger.info("Action=ask pending_question set to: %s", st.session_state.pending_question)
         st.session_state.history.append(("assistant", state["followup"]))
         st.stop()
 
     st.session_state.pending_question = ""
     target_labels = state.get("target_labels", [])
     service_labels = state.get("service_labels", [])
-
-    # ログ出力: 取得したラベル
-    logger.info(f"対象者ラベル: {target_labels}")
-    logger.info(f"サービスラベル: {service_labels}")
+    logger.info(
+        "検索を実行: 対象者ラベル=%s サービスラベル=%s",
+        target_labels,
+        service_labels,
+    )
 
     # 3) filter catalog by labels
     filtered_df = searcher.filter_by_labels(target_labels, service_labels)

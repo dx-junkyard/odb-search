@@ -1,9 +1,13 @@
 from __future__ import annotations
 from typing import List, Optional, TypedDict
 
+import logging
 from langgraph.graph import StateGraph, END
 
 from llm_utils import label_question
+
+
+logger = logging.getLogger(__name__)
 
 
 class GraphState(TypedDict):
@@ -17,15 +21,22 @@ class GraphState(TypedDict):
 
 def classify_node(state: GraphState) -> GraphState:
     """Classify user question into target and service labels."""
+    logger.info("ClassifyNode: question=%s", state["question"])
     labels = label_question(state["question"])
     state["target_labels"] = labels.get("target_labels", [])
     state["service_labels"] = labels.get("service_labels", [])
+    logger.info(
+        "ClassifyNode: target_labels=%s service_labels=%s",
+        state["target_labels"],
+        state["service_labels"],
+    )
     return state
 
 
 def decide_next(state: GraphState) -> GraphState:
     """Decide whether to ask for target info or proceed to search."""
     targets = state.get("target_labels", [])
+    logger.info("DecideNode: targets=%s", targets)
     # ask when target is missing or labeled as other/unknown
     if (not targets) or any("その他" in t for t in targets):
         state["action"] = "ask"
@@ -33,9 +44,11 @@ def decide_next(state: GraphState) -> GraphState:
             "サービスを利用する対象者を教えてください。\n"
             "例: 乳幼児, 未就学児, 小学生, 中学生, 高校生, 大学生, 保護者, 社会人, 高齢者, 障がい者, 事業者, 男性, 女性, どなたでも利用・参加可能"
         )
+        logger.info("DecideNode: action=ask followup=%s", state["followup"])
     else:
         state["action"] = "search"
         state["followup"] = None
+        logger.info("DecideNode: action=search")
     return state
 
 
