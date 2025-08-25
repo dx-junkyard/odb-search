@@ -29,6 +29,12 @@ if "pending_question" not in st.session_state:
 searcher = CatalogSearchEngine()
 selector = ServiceSelector()
 
+# --- Render chat history (moved before form to ensure it's shown even if rerun/stop) ---
+for role, msg in st.session_state.history:
+    avatar = "🧑‍💻" if role == "user" else "🤖"
+    label  = "利用者" if role == "user" else "案内"
+    st.chat_message(f"{avatar} {label}", avatar=avatar).markdown(msg)
+
 # --- Chat input form ---
 with st.form("chat_form", clear_on_submit=True):
     user_msg = st.text_input("なんでも質問してください")
@@ -55,14 +61,14 @@ if submitted and user_msg:
     except Exception:
         logger.exception("label_question failed")
         st.session_state.history.append(("assistant", "内部エラーが発生しました。時間を置いて再度お試しください。"))
-        st.stop()
+        st.rerun()
 
     if state["action"] == "ask":
         # ask user to specify target
         st.session_state.pending_question = combined_question
         logger.info("Action=ask pending_question set to: %s", st.session_state.pending_question)
         st.session_state.history.append(("assistant", state["followup"]))
-        st.stop()
+        st.rerun()
 
     st.session_state.pending_question = ""
     target_labels = state.get("target_labels", [])
@@ -109,9 +115,4 @@ if submitted and user_msg:
             assistant_reply = "以下のサービスが見つかりました:\n" + services
 
     st.session_state.history.append(("assistant", assistant_reply))
-
-# --- Render chat history ---
-for role, msg in st.session_state.history:
-    avatar = "🧑‍💻" if role == "user" else "🤖"
-    label  = "利用者" if role == "user" else "案内"
-    st.chat_message(f"{avatar} {label}", avatar=avatar).markdown(msg)
+    st.rerun()
