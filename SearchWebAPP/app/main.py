@@ -2,7 +2,6 @@ import os
 import sys
 import logging
 import streamlit as st
-import numpy as np
 from dotenv import load_dotenv
 
 # ログ設定
@@ -13,8 +12,9 @@ _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(_CURRENT_DIR)
 
 from embed_utils import embed_text
-from llm_utils import label_question, ServiceSelector
+from llm_utils import ServiceSelector
 from catalog_utils import CatalogSearchEngine
+from conversation_graph import workflow
 
 load_dotenv()
 
@@ -23,6 +23,8 @@ st.set_page_config(page_title="自治体サービス案内チャット", page_ic
 # keep chat history between reruns
 if "history" not in st.session_state:
     st.session_state.history = []  # list[(role, msg)]
+if "pending_question" not in st.session_state:
+    st.session_state.pending_question = ""
 
 searcher = CatalogSearchEngine()
 selector = ServiceSelector()
@@ -37,28 +39,39 @@ if submitted and user_msg:
     # 1) store user message
     st.session_state.history.append(("user", user_msg))
 
-    # 2) classify with LLM → labels
+    # combine with pending question if we previously asked for target info
+    combined_question = f"{st.session_state.pending_question} {user_msg}".strip()
+
+    # 2) classify using LangGraph workflow
     try:
-        labels = label_question(user_msg)
+        state = workflow.invoke({"question": combined_question, "target_labels": [], "service_labels": []})
     except Exception:
         logger.exception("label_question failed")
         st.session_state.history.append(("assistant", "内部エラーが発生しました。時間を置いて再度お試しください。"))
         st.stop()
-    target_labels = labels.get("target_labels", [])
-    service_labels = labels.get("service_labels", [])
-    
+
+    if state["action"] == "ask":
+        # ask user to specify target
+        st.session_state.pending_question = combined_question
+        st.session_state.history.append(("assistant", state["followup"]))
+        st.stop()
+
+    st.session_state.pending_question = ""
+    target_labels = state.get("target_labels", [])
+    service_labels = state.get("service_labels", [])
+
     # ログ出力: 取得したラベル
     logger.info(f"対象者ラベル: {target_labels}")
     logger.info(f"サービスラベル: {service_labels}")
 
     # 3) filter catalog by labels
     filtered_df = searcher.filter_by_labels(target_labels, service_labels)
-    
+
     # ログ出力: フィルター後の件数
     logger.info(f"フィルター後のサービス件数: {len(filtered_df)}件")
 
     # 4) BERT embed + similarity ranking (top 50)
-    query_vec = embed_text(user_msg)
+    query_vec = embed_text(combined_question)
     ranked_df = searcher.rank(filtered_df, query_vec, top_n=50)
 
     # 5) craft assistant reply using LLM selection
@@ -70,7 +83,7 @@ if submitted and user_msg:
             for _, row in ranked_df.iterrows()
         ]
         try:
-            recs = selector.recommend(user_msg, candidates)
+            recs = selector.recommend(combined_question, candidates)
         except Exception:
             logger.exception("recommend failed")
             recs = []
