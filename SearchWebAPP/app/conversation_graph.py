@@ -42,7 +42,8 @@ def decide_next(state: GraphState) -> GraphState:
         state["action"] = "ask"
         state["followup"] = (
             "サービスを利用する対象者を教えてください。\n"
-            "例: 乳幼児, 未就学児, 小学生, 中学生, 高校生, 大学生, 保護者, 社会人, 高齢者, 障がい者, 事業者, 男性, 女性, どなたでも利用・参加可能"
+            "提供サービス、補助金や支援の対象を正確にご案内するために、サービス提供対象者のご家族や世帯の状況を教えていただけますか？\n"
+            "例: 3歳の子がいる母親、高校生の子を持つ父親、65歳以上の一人暮らし など"
         )
         logger.info("DecideNode: action=ask followup=%s", state["followup"])
     else:
