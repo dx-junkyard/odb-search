@@ -24,34 +24,14 @@ class GraphState(TypedDict):
 
 
 # -------------------------
-# （任意だが有効）簡易ヒューリスティック補正
-# -------------------------
-def _heuristic_labels(q: str) -> tuple[list, list]:
-    """単語ヒットで最低限のラベルを補強（LLMが外した際の保険）"""
-    tg: list = []
-    sv: list = []
-    if "定年" in q or "退職" in q:
-        tg.append("高齢者")
-    if "求人" in q or "就職" in q or "仕事" in q:
-        sv.append("雇用・就労支援")
-    return tg, sv
-
-
-# -------------------------
 # 既存: ラベル付け → 対象者が不明なら ask
 # -------------------------
 def classify_node(state: GraphState) -> GraphState:
     logger.info("ClassifyNode: question=%s", state["question"])
+    # ユーザーの質問に対して「対象者」と「該当サービス」のラベルを付与
     labels = label_question(state["question"])
     state["target_labels"] = labels.get("target_labels", []) or []
     state["service_labels"] = labels.get("service_labels", []) or []
-
-    # 簡易ヒューリスティック補正をマージ
-    ht, hs = _heuristic_labels(state["question"])
-    if ht:
-        state["target_labels"] = list({*state["target_labels"], *ht})
-    if hs:
-        state["service_labels"] = list({*state["service_labels"], *hs})
 
     logger.info(
         "ClassifyNode: targets=%s services=%s",
